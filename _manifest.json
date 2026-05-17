@@ -1,0 +1,37 @@
+{
+  "manifest_version": 2,
+  "id": "Color2333.maibot-daily-news-plugin",
+  "version": "1.0.0",
+  "name": "每日60秒新闻",
+  "description": "每天定时向 QQ 群推送每日 60 秒新闻，支持手动获取和管理员推送。MaiBot 移植版，迁移来源：anka-afk/astrbot_plugin_daily_news。",
+  "author": {
+    "name": "Color2333",
+    "url": "https://github.com/Color2333"
+  },
+  "license": "MIT",
+  "urls": {
+    "repository": "https://github.com/Color2333/maibot-daily-news-plugin"
+  },
+  "host_application": {
+    "min_version": "1.0.0",
+    "max_version": "1.99.99"
+  },
+  "sdk": {
+    "min_version": "2.0.0",
+    "max_version": "2.99.99"
+  },
+  "dependencies": [
+    {
+      "type": "python_package",
+      "name": "aiohttp",
+      "version_spec": ">=3.8.0"
+    }
+  ],
+  "capabilities": [
+    "send.text",
+    "send.custom"
+  ],
+  "i18n": {
+    "default_locale": "zh-CN"
+  }
+}

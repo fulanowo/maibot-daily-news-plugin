@@ -1,0 +1,18 @@
+[plugin]
+enabled = true
+config_version = "1.0.0"
+
+[news]
+target_groups = []
+push_time = "08:00"
+scheduled_mode = "image"
+command_prefixes = ["/get_news", "/news", "/每日新闻"]
+admin_push_commands = ["/push_news"]
+status_commands = ["/news_status"]
+admins = []
+timeout_seconds = 30
+
+[api]
+host = "127.0.0.1"
+port = 3000
+token = ""

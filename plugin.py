@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import datetime as dt
+import json
 import urllib.parse
-import urllib.request
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -256,7 +257,7 @@ class DailyNewsPlugin(MaiBotPlugin):
             user_id = self._get_user_id(message)
             if not user_id:
                 return False
-            return await self._post_onebot("/send_private_msg", {"user_id": user_id, "message": [{"type": "image", "data": {"file": self._file_uri(path)}}]})
+            return await self._post_onebot("/send_private_msg", {"user_id": user_id, "message": [self._image_segment(path)]})
         group_id = self._get_group_id(message)
         if not group_id:
             return False
@@ -266,7 +267,7 @@ class DailyNewsPlugin(MaiBotPlugin):
         return await self._post_onebot("/send_group_msg", {"group_id": group_id, "message": [{"type": "text", "data": {"text": text}}]})
 
     async def _send_group_image(self, group_id: str, path: Path) -> bool:
-        return await self._post_onebot("/send_group_msg", {"group_id": group_id, "message": [{"type": "image", "data": {"file": self._file_uri(path)}}]})
+        return await self._post_onebot("/send_group_msg", {"group_id": group_id, "message": [self._image_segment(path)]})
 
     async def _post_onebot(self, endpoint: str, payload: dict[str, Any]) -> bool:
         token = str(self.config.api.token or "").strip()
@@ -275,24 +276,48 @@ class DailyNewsPlugin(MaiBotPlugin):
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, json=payload, headers=headers, timeout=60) as response:
-                    if response.status == 200:
-                        return True
+                    body = await response.text()
                     if response.status in (401, 403) and token:
                         retry_url = f"{url}?access_token={urllib.parse.quote(token)}"
                         async with session.post(retry_url, json=payload, headers=headers, timeout=60) as retry:
-                            if retry.status == 200:
-                                return True
-                            self.ctx.logger.warning("OneBot retry failed: HTTP %s %s", retry.status, await retry.text())
-                            return False
-                    self.ctx.logger.warning("OneBot request failed: HTTP %s %s", response.status, await response.text())
-                    return False
+                            retry_body = await retry.text()
+                            if retry.status != 200:
+                                self.ctx.logger.warning("OneBot retry failed: HTTP %s %s", retry.status, retry_body)
+                                return False
+                            return self._check_onebot_result(endpoint, retry_body)
+                    if response.status != 200:
+                        self.ctx.logger.warning("OneBot request failed: HTTP %s %s", response.status, body)
+                        return False
+                    return self._check_onebot_result(endpoint, body)
         except Exception as exc:
             self.ctx.logger.warning("OneBot request error: %s", exc)
             return False
 
+    def _check_onebot_result(self, endpoint: str, body: str) -> bool:
+        """检查 OneBot 响应体：业务失败常以 HTTP 200 + status=failed 返回，只看状态码会漏报。"""
+        try:
+            result = json.loads(body)
+        except ValueError:
+            return True
+        if not isinstance(result, dict):
+            return True
+        status = str(result.get("status") or "ok").lower()
+        if status in {"ok", "async"}:
+            return True
+        self.ctx.logger.warning(
+            "OneBot %s 发送失败: status=%s retcode=%s message=%s",
+            endpoint,
+            status,
+            result.get("retcode"),
+            result.get("message") or result.get("wording") or result.get("msg") or "",
+        )
+        return False
+
     @staticmethod
-    def _file_uri(path: Path) -> str:
-        return "file:///" + urllib.request.pathname2url(str(path)).lstrip("/")
+    def _image_segment(path: Path) -> dict[str, Any]:
+        """图片消息段内联 base64，避免 OneBot 服务与插件不在同一文件系统（容器/跨机）时读不到文件。"""
+        encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+        return {"type": "image", "data": {"file": f"base64://{encoded}"}}
 
     @staticmethod
     def _starts_with_any(text: str, prefixes: list[str]) -> bool:

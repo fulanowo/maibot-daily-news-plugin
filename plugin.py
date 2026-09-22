@@ -22,6 +22,10 @@ API_URLS = (
     "https://60s-api-cf.114128.xyz/v2/60s",
 )
 
+# 显式声明可解码的压缩算法：部分环境下 aiohttp 与 brotli 库接口不匹配，
+# 服务器返回 br 时会直接抛 "Can not decode content-encoding: br"。
+REQUEST_HEADERS = {"Accept-Encoding": "gzip, deflate"}
+
 
 class PluginSectionConfig(PluginConfigBase):
     __ui_label__ = "插件"
@@ -168,7 +172,7 @@ class DailyNewsPlugin(MaiBotPlugin):
             last_error = ""
             for url in API_URLS:
                 try:
-                    async with session.get(url) as response:
+                    async with session.get(url, headers=REQUEST_HEADERS) as response:
                         if response.status != 200:
                             last_error = f"{url} HTTP {response.status}"
                             continue
@@ -193,7 +197,7 @@ class DailyNewsPlugin(MaiBotPlugin):
 
         timeout = aiohttp.ClientTimeout(total=int(self.config.news.timeout_seconds))
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(image_url) as response:
+            async with session.get(image_url, headers=REQUEST_HEADERS) as response:
                 if response.status != 200:
                     raise RuntimeError(f"每日新闻图片下载失败：HTTP {response.status}")
                 data = await response.read()
